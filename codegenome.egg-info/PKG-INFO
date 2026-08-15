@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: codegenome
+Version: 0.1.0
+Summary: Deep-tech software intelligence platform for predicting code change impact
+Requires-Python: >=3.12
+Requires-Dist: pydantic>=2.0
+Requires-Dist: networkx>=3.0
+Requires-Dist: gitpython>=3.1
+Requires-Dist: fastapi>=0.100
+Requires-Dist: uvicorn>=0.23
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: aiosqlite>=0.19
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: ruff>=0.1; extra == "dev"
