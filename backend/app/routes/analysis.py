@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_session
-from backend.app.models import AnalysisRun, ImpactResult
+from backend.app.models import AnalysisRun, ChangedFunction, ImpactResult
 from backend.app.schemas import (
     AnalysisCreate,
     AnalysisResponse,
@@ -67,7 +67,7 @@ async def get_analysis_functions(analysis_id: str, session: AsyncSession = Depen
     if analysis is None:
         raise HTTPException(status_code=404, detail="Analysis not found")
     funcs_result = await session.execute(
-        select(AnalysisRun.changed_functions).where(AnalysisRun.id == analysis_id)
+        select(ChangedFunction).where(ChangedFunction.analysis_run_id == analysis_id)
     )
     funcs = funcs_result.scalars().all()
     return [FunctionResponse.model_validate(f) for f in funcs]

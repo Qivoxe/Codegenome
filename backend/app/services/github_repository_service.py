@@ -48,6 +48,22 @@ class GitHubRepositoryService:
         repo_id = f"github:{owner}/{name}"
         safe_name = f"{owner}-{name}"
         workspace = Path(tempfile.gettempdir()) / "codegenome-workspace" / safe_name
+
+        existing = await self.session.get(Repository, repo_id)
+        if existing:
+            if not workspace.exists():
+                _rmtree_safe(workspace)
+                try:
+                    subprocess.run(
+                        ["git", "clone", "--depth=1", clone_url, str(workspace)],
+                        check=True,
+                        capture_output=True,
+                    )
+                except subprocess.CalledProcessError as exc:
+                    _rmtree_safe(workspace)
+                    raise ValueError(f"Failed to clone repository: {exc.stderr.decode('utf-8', errors='replace')}") from exc
+            return existing
+
         _rmtree_safe(workspace)
         try:
             subprocess.run(
