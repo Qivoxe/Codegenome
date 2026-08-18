@@ -53,7 +53,7 @@ class ImpactResponse(BaseModel):
     impact_paths: list[list[str]]
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
-    ml_risk: float
+    ml_risk: int
     ml_risk_level: str
     llm_explanation: dict[str, Any]
 
@@ -67,3 +67,48 @@ class GraphResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class GitHubRepositoryCreate(BaseModel):
+    url: str
+
+
+class GitHubRepositoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    owner: str
+    name: str
+    url: str
+    status: str
+    created_at: datetime
+
+
+class AnalysisStatusResponse(BaseModel):
+    analysis_id: str
+    status: str
+    stage: str
+    progress: int
+    message: str
+
+
+class FunctionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    qualified_name: str
+    file_path: str
+    lineno: int
+    end_lineno: int | None
+    change_type: str
+
+
+class ImpactAnalysisRequest(BaseModel):
+    function_id: str
+
+
+class ImpactAnalysisResponse(BaseModel):
+    function: str
+    impact_score: int
+    impact_level: str
+    affected_components: list[str]
+    paths: list[list[str]]
+    reasons: list[str]

@@ -15,7 +15,7 @@ from backend.app.routes.repositories import router as repositories_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await init_db()
+    init_db()
     yield
     await close_db()
 

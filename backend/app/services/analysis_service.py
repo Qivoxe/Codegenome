@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from backend.app.database import Base
 from backend.app.models import AnalysisRun, ChangedFunction, ImpactResult, Repository
 from codegenome import GenomeGraph, GitEngine, ImpactEngine, SourceParser
 from codegenome.github import GitHubClient, GitHubWebhookPayload
@@ -16,6 +18,10 @@ from codegenome.ml.features import FeatureExtractor
 from codegenome.ml.predict import RiskPredictor
 from codegenome.pr_comment import format_pr_comment
 from codegenome.security import SecureRepoManager
+
+
+_engine = create_async_engine("sqlite+aiosqlite:///./codegenome.db")
+_session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 class AnalysisService:
@@ -33,7 +39,7 @@ class AnalysisService:
         if repo is None:
             raise ValueError("Repository not found")
 
-        repo_path = self.repo_manager.validate_path(str(repo.path))
+        repo_path = self.repo_manager.validate_path(str(repo.path), strict=False)
         return await self._analyze_path(repo_path, str(repo.id))
 
     async def run_analysis_for_pr(
@@ -58,24 +64,43 @@ class AnalysisService:
         finally:
             self.repo_manager.cleanup(repo_id)
 
+    async def _update_status(self, analysis: AnalysisRun, status: str, stage: str, progress: int, message: str) -> None:
+        analysis.status = status
+        analysis.stage = stage
+        analysis.progress = progress
+        analysis.message = message
+        await self.session.commit()
+        await self.session.refresh(analysis)
+
     async def _analyze_path(self, repo_path: Path, repository_id: str) -> AnalysisRun:
+        placeholder = AnalysisRun(
+            id=str(uuid.uuid4()),
+            repository_id=repository_id,
+            commit_hash="",
+            commit_message="",
+            status="running",
+            stage="validating",
+            progress=5,
+            message="Validating repository",
+        )
+        self.session.add(placeholder)
+        await self.session.flush()
+
         git_engine = GitEngine(str(repo_path))
         commits = list(git_engine.repo.iter_commits("HEAD"))
         if not commits:
+            await self._update_status(placeholder, "failed", "validating", 5, "No commits found in repository")
             raise ValueError("No commits found in repository")
 
         latest_commit = commits[0]
-        analysis = AnalysisRun(
-            id=str(uuid.uuid4()),
-            repository_id=repository_id,
-            commit_hash=latest_commit.hexsha,
-            commit_message=latest_commit.message.strip(),
-        )
-        self.session.add(analysis)
-        await self.session.flush()
+        placeholder.commit_hash = latest_commit.hexsha
+        placeholder.commit_message = latest_commit.message.strip()
+        await self._update_status(placeholder, "running", "discovering", 15, "Discovering source files")
 
         parser = SourceParser(repo_path)
         parser.parse_repo()
+
+        await self._update_status(placeholder, "running", "parsing", 30, "Parsing Python files")
 
         graph = GenomeGraph()
         graph.build(
@@ -95,14 +120,19 @@ class AnalysisService:
         )
         changed_files = git_engine.get_changed_files(latest_commit.hexsha)
 
+        await self._update_status(placeholder, "running", "calculating_impact", 70, "Calculating impact")
+        max_functions = 50
+        analyzed = 0
         for cf in changed_files:
             if not cf.file_path.endswith(".py"):
                 continue
             changed_functions = git_engine.get_changed_functions(latest_commit.hexsha, cf.file_path)
             for cf_obj in changed_functions:
+                if analyzed >= max_functions:
+                    break
                 changed_function = ChangedFunction(
                     id=str(uuid.uuid4()),
-                    analysis_run_id=analysis.id,
+                    analysis_run_id=placeholder.id,
                     qualified_name=cf_obj.qualified_name,
                     file_path=cf_obj.file_path,
                     lineno=cf_obj.lineno,
@@ -114,7 +144,7 @@ class AnalysisService:
                 report = engine.compute_impact(cf_obj.qualified_name)
                 impact = ImpactResult(
                     id=str(uuid.uuid4()),
-                    analysis_run_id=analysis.id,
+                    analysis_run_id=placeholder.id,
                     changed_function=report.changed_function,
                     file_path=report.file_path,
                     direct_impact=report.direct_impact,
@@ -131,10 +161,35 @@ class AnalysisService:
                     llm_explanation=report.llm_explanation,
                 )
                 self.session.add(impact)
+                analyzed += 1
+            if analyzed >= max_functions:
+                break
 
+        await self._update_status(placeholder, "completed", "completed", 100, "Analysis complete")
         await self.session.commit()
-        await self.session.refresh(analysis)
-        return analysis
+        await self.session.refresh(placeholder)
+        return placeholder
+
+    async def compute_impact_for_function(self, analysis_id: str, function_id: str) -> Any:
+        analysis = await self.session.get(AnalysisRun, analysis_id)
+        if analysis is None:
+            raise ValueError("Analysis not found")
+        repo = await self.session.get(Repository, analysis.repository_id)
+        if repo is None:
+            raise ValueError("Repository not found")
+        repo_path = Path(repo.path)
+        parser = SourceParser(repo_path)
+        parser.parse_repo()
+        graph = GenomeGraph()
+        graph.build(
+            list(parser.modules.values())
+            + list(parser.classes.values())
+            + list(parser.function_nodes.values())
+            + list(parser.method_nodes.values()),
+            parser.edges,
+        )
+        engine = ImpactEngine(graph)
+        return engine.compute_impact(function_id)
 
     def _build_pr_comment(self, analysis: AnalysisRun) -> str:
         impacts = []

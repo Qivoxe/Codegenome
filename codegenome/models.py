@@ -95,19 +95,9 @@ class ImpactReport(BaseModel):
     llm_explanation: dict[str, Any] = Field(default_factory=dict)
 
 
-class ExplanationOutput(BaseModel):
-    summary: str = ""
-    why_risky: str = ""
-    affected_components_explanation: str = ""
-    impact_paths_explanation: str = ""
-    recommended_tests: list[str] = Field(default_factory=list)
-    review_recommendations: list[str] = Field(default_factory=list)
-
-
 __all__ = [
     "ChangedFunction",
     "EdgeType",
-    "ExplanationOutput",
     "FunctionArgument",
     "GitChange",
     "GitFileChange",

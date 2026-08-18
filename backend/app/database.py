@@ -21,9 +21,12 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def init_db() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+def init_db() -> None:
+    from sqlalchemy import create_engine
+    sync_url = DATABASE_URL.replace("+aiosqlite", "")
+    sync_engine = create_engine(sync_url)
+    Base.metadata.create_all(sync_engine)
+    sync_engine.dispose()
 
 
 async def close_db() -> None:

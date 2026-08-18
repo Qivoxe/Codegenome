@@ -5,6 +5,8 @@ from typing import Any
 
 import networkx as nx
 
+from codegenome.llm import ExplanationInput
+
 from codegenome.graph import GenomeGraph
 from codegenome.models import EdgeType, GraphEdge, GraphNode, ImpactLevel, ImpactReport
 
@@ -136,7 +138,7 @@ class ImpactEngine:
 
         return ImpactReport(
             changed_function=function_qualified_name,
-            file_path=self.graph.graph.nodes[function_qualified_name].get("file_path", ""),
+            file_path=self.graph.graph.nodes[function_qualified_name].get("file_path", "") if function_qualified_name in self.graph.graph.nodes else "",
             direct_impact=direct_callers,
             transitive_impact=transitive_callers,
             impact_score=score,
@@ -245,7 +247,5 @@ class ImpactEngine:
                 pass
         return paths[:20]
 
-
-from codegenome.llm import ExplanationInput
 
 __all__ = ["ImpactEngine"]

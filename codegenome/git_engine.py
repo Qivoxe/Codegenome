@@ -23,7 +23,18 @@ class GitEngine:
                 if item.type == "blob"  # type: ignore[union-attr]
             ]
         parent = commit.parents[0]
-        diffs = parent.diff(commit, create_patch=True)
+        try:
+            diffs = parent.diff(commit, create_patch=True)
+        except git.exc.GitCommandError:
+            return [
+                GitFileChange(
+                    file_path=str(item.path),  # type: ignore[union-attr]
+                    change_type="added",
+                    added_lines=item.size if item.size else 0,  # type: ignore[union-attr]
+                )
+                for item in commit.tree.traverse()
+                if item.type == "blob"  # type: ignore[union-attr]
+            ]
         result: list[GitFileChange] = []
         for diff in diffs:
             change_type = "modified"
@@ -50,7 +61,10 @@ class GitEngine:
         if not commit.parents:
             return set(), set()
         parent = commit.parents[0]
-        diffs = parent.diff(commit, paths=[file_path], create_patch=True)
+        try:
+            diffs = parent.diff(commit, paths=[file_path], create_patch=True)
+        except git.exc.GitCommandError:
+            return set(range(1, 1000)), set()
         added: set[int] = set()
         deleted: set[int] = set()
         for diff in diffs:

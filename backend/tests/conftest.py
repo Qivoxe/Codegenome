@@ -27,8 +27,8 @@ def client() -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(autouse=True)
-async def _init_db() -> None:
-    await init_db()
+def _init_db() -> None:
+    init_db()
 
 
 def _cleanup() -> None:

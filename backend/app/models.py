@@ -23,6 +23,9 @@ class Repository(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     path = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
+    owner = Column(String, nullable=False, default="")
+    url = Column(String, nullable=False, default="")
+    status = Column(String, nullable=False, default="ready")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -36,6 +39,10 @@ class AnalysisRun(Base):
     repository_id = Column(String, ForeignKey("repositories.id"), nullable=False)
     commit_hash = Column(String, nullable=False)
     commit_message = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="queued")
+    stage = Column(String, nullable=False, default="queued")
+    progress = Column(Integer, nullable=False, default=0)
+    message = Column(String, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     repository = relationship("Repository", back_populates="analysis_runs")
@@ -79,3 +86,7 @@ class ImpactResult(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     analysis_run = relationship("AnalysisRun", back_populates="impact_results")
+
+    @property
+    def analysis_id(self) -> str:
+        return self.analysis_run_id

@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_session
-from backend.app.schemas import ErrorResponse, RepositoryCreate, RepositoryResponse
+from backend.app.schemas import (
+    ErrorResponse,
+    GitHubRepositoryCreate,
+    GitHubRepositoryResponse,
+    RepositoryCreate,
+    RepositoryResponse,
+)
+from backend.app.services.github_repository_service import GitHubRepositoryService
 from backend.app.services.repository_service import RepositoryService
 
 router = APIRouter()
@@ -23,5 +30,15 @@ async def create_repository(payload: RepositoryCreate, session: AsyncSession = D
     try:
         repo = await service.create_repository(payload.path)
         return RepositoryResponse.model_validate(repo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/repositories/github", response_model=GitHubRepositoryResponse, responses={400: {"model": ErrorResponse}})
+async def register_github_repo(payload: GitHubRepositoryCreate, session: AsyncSession = Depends(get_session)) -> GitHubRepositoryResponse:  # noqa: B008
+    service = GitHubRepositoryService(session)
+    try:
+        repo = await service.register_github_repo(payload.url)
+        return GitHubRepositoryResponse.model_validate(repo)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

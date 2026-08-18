@@ -51,12 +51,17 @@ class SecureRepoManager:
         import hashlib
         return hashlib.sha256(repo_id.encode("utf-8")).hexdigest()[:16]
 
-    def validate_path(self, path: str) -> Path:
+    def validate_path(self, path: str, strict: bool = True) -> Path:
         p = Path(path).resolve()
         if not p.is_dir():
             raise ValueError("Repository path must be a directory")
         if not (p / ".git").exists():
             raise ValueError("Not a git repository")
+        if strict:
+            try:
+                p.relative_to(self.base_dir)
+            except ValueError:
+                raise ValueError("Repository path is outside allowed directory") from None
         return p
 
 
