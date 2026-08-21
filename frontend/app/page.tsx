@@ -51,14 +51,21 @@ export default function Dashboard() {
         setStatus(s);
         if (s.status === "completed") {
           clearInterval(interval);
-          const [impactResults, graphData, funcs] = await Promise.all([
+          const [impactResult, graphResult, funcsResult] = await Promise.allSettled([
             getImpactResults(analysis.id),
             getGraphData(analysis.id),
             getAnalysisFunctions(analysis.id),
           ]);
-          setImpacts(impactResults);
-          setGraph(graphData);
-          setFunctions(funcs);
+
+          if (impactResult.status === "fulfilled") setImpacts(impactResult.value);
+          if (graphResult.status === "fulfilled") setGraph(graphResult.value);
+          if (funcsResult.status === "fulfilled") setFunctions(funcsResult.value);
+
+          const failed = [impactResult, graphResult, funcsResult].filter(r => r.status === "rejected");
+          if (failed.length > 0) {
+            console.error("Partial result fetch failure:", failed);
+          }
+
           setScreen("results");
           setLoading(false);
         } else if (s.status === "failed") {

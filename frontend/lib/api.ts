@@ -104,11 +104,6 @@ export const runAnalysis = async (repositoryId: string) => {
   return response.data;
 };
 
-export const getAnalysis = async (analysisId: string) => {
-  const response = await api.get<AnalysisRun>(`/analysis/${analysisId}`);
-  return response.data;
-};
-
 export const getAnalysisStatus = async (analysisId: string) => {
   const response = await api.get<AnalysisStatus>(`/analysis/${analysisId}/status`);
   return response.data;

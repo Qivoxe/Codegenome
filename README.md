@@ -301,6 +301,43 @@ CODEGENOME_LLM_MODEL="gpt-4o-mini"
 
 ---
 
+## Production Deployment
+
+### Frontend (Vercel)
+
+1. Import the repository into Vercel
+2. Set **Root Directory** to `frontend`
+3. Set environment variable:
+   - `NEXT_PUBLIC_API_BASE=https://codegenome-api.onrender.com`
+4. Deploy
+
+### Backend (Render)
+
+1. Create a new **Web Service** on Render
+2. Connect your repository
+3. Set **Root Directory** to `backend`
+4. Set **Build Command** to `pip install -e .`
+5. Set **Start Command** to `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
+6. Add environment variables:
+   - `DATABASE_URL=sqlite+aiosqlite:///./codegenome.db`
+   - `GITHUB_WEBHOOK_SECRET=<random-secret>`
+7. Deploy
+
+> **Note:** Render's free tier uses an ephemeral filesystem. SQLite data is lost between deployments. For production persistence, upgrade to PostgreSQL and set `DATABASE_URL=postgresql+asyncpg://...`.
+
+### API Flow
+
+```
+POST /repositories/github
+POST /analyze
+GET /analysis/{id}/status (poll until completed)
+GET /analysis/{id}/functions
+GET /analysis/{id}/impact
+GET /analysis/{id}/graph
+```
+
+---
+
 ## Future Roadmap
 
 - [ ] **Neo4j persistence** for large-scale graph queries

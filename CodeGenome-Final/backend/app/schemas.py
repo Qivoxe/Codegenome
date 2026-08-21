@@ -35,10 +35,6 @@ class AnalysisResponse(BaseModel):
     repository_id: str
     commit_hash: str
     commit_message: str
-    status: str = "running"
-    stage: str = "queued"
-    progress: int = 0
-    message: str = ""
     created_at: datetime
 
 
