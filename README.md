@@ -1,362 +1,246 @@
+<div align="center">
+
 # 🧬 CodeGenome
 
-> **Predict what breaks before it breaks.**
+### Know what your code change could break — *before* production does.
 
-CodeGenome builds a **Software Genome** — a deep dependency graph of your codebase — and uses it to predict the blast radius of every change. Get impact scores, risk levels, affected modules, and AI-generated explanations before merging.
+`Git diff` tells you **what changed**. CodeGenome tells you **what that change touches**.
 
-![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![FastAPI](https://img.shields.io/badge/fastapi-0.100%2B-009688)
-![Next.js](https://img.shields.io/badge/next.js-16.3.0-black)
-![XGBoost](https://img.shields.io/badge/xgboost-experimental-orange)
-![Tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)
+![status](https://img.shields.io/badge/status-hackathon%20MVP-orange)
+![python](https://img.shields.io/badge/backend-Python%20%2F%20FastAPI-3776AB)
+![frontend](https://img.shields.io/badge/frontend-Next.js%20%2F%20React%20Flow-black)
+![license](https://img.shields.io/badge/license-add--your--license-lightgrey)
 
----
+[Quick Start](#-quick-start-2-terminals) · [How It Works](#-how-it-works) · [60-Second Demo](#-60-second-judge-demo) · [Roadmap](#-roadmap)
 
-## The Problem
-
-Git diffs tell you **what changed**. They don't tell you **what could break**.
-
-A single line change in `checkout.py` can cascade through `order.py`, `payment.py`, and `invoice.py` — and you only discover the regression in production.
-
-## The Solution
-
-CodeGenome constructs a **biological-inspired model** of your software:
-
-```
-Function A calls Function B calls Function C
-         ↓
-   [Impact propagates upward]
-         ↓
-Function C changed → Function B at risk → Function A at risk
-```
-
-When a PR modifies a function, CodeGenome:
-
-1. **Parses** the entire codebase into a typed dependency graph
-2. **Propagates** impact upstream using BFS traversal
-3. **Scores** the blast radius (0–100) with deterministic rules
-4. **Enriches** with ML risk prediction (XGBoost) and LLM explanations
-5. **Visualizes** the impact graph interactively
-6. **Comments** on GitHub PRs automatically
+</div>
 
 ---
 
-## Architecture
+## ⚡ The Pitch
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        USER INTERACTION                              │
-│  ┌──────────────┐                              ┌─────────────────┐  │
-│  │  Web UI      │                              │  GitHub PR      │  │
-│  │  Next.js     │                              │  Webhook        │  │
-│  │  React Flow  │                              │  HMAC-SHA256    │  │
-│  └──────┬───────┘                              └────────┬────────┘  │
-│         │                                                  │          │
-│         ▼                                                  ▼          │
-│  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │                    FastAPI Backend                              │ │
-│  │  Repositories ──► Analysis Service ──► Persistence (SQLAlchemy)│ │
-│  └───────────────────────────┬─────────────────────────────────────┘ │
-│                              │                                      │
-│                              ▼                                      │
-│  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │                  CODEGENOME CORE ENGINE                         │ │
-│  │                                                                  │ │
-│  │   GitEngine ──► SourceParser ──► GenomeGraph ──► ImpactEngine  │ │
-│  │      │              │                  │                        │ │
-│  │   GitPython       AST             NetworkX BFS/DFS             │ │
-│  └──────────────────────────┬─────────────────────────────────────┘ │
-│                             │                                        │
-│          ┌──────────────────┼──────────────────┐                    │
-│          ▼                  ▼                  ▼                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐           │
-│  │  ML Layer    │  │  LLM Layer   │  │  GitHub Client  │           │
-│  │  XGBoost     │  │  OpenAI API  │  │  REST API       │           │
-│  │  11 features │  │  Structured  │  │  PR Comments    │           │
-│  │  Standard    │  │  JSON output │  │  Markdown       │           │
-│  │  Scaler      │  │  Fallback    │  │                 │           │
-│  └──────────────┘  └──────────────┘  └─────────────────┘           │
-└─────────────────────────────────────────────────────────────────────┘
+A developer changes **one line**:
+
+```diff
+- amount = order.total
++ amount = order.total * 1.18
 ```
 
-### Tech Stack
+Git reports: `1 file changed, 1 line changed`.
 
-| Layer           | Technology                                                 |
-| --------------- | ---------------------------------------------------------- |
-| **Frontend**    | Next.js 16, React 19, TypeScript, Tailwind CSS, React Flow |
-| **Backend**     | FastAPI, SQLAlchemy 2.0, aiosqlite                         |
-| **Core Engine** | Python 3.12, NetworkX, GitPython, AST                      |
-| **ML**          | XGBoost, scikit-learn, pandas                              |
-| **LLM**         | OpenAI-compatible API                                      |
-| **Security**    | HMAC-SHA256, tempfile sandboxing                           |
+What actually happens downstream:
+
+```
+order.total → payment amount → charge_card() → payment provider
+order.total → invoice generation → tax calculation
+```
+
+**Change size ≠ change impact.** CodeGenome parses your repo into a dependency graph (a "Software Genome"), traces that graph from any changed function, and shows you — with evidence, not vibes — everything downstream that could break.
+
+Built for large legacy codebases, monorepos, microservices, and payment/financial systems: places where no single engineer holds the whole call graph in their head.
 
 ---
 
-## Features
+## 🎬 60-Second Judge Demo
 
-### 🧪 Software Genome Graph
-
-- Parses Python repositories into a typed directed graph
-- **4 node types**: `MODULE`, `CLASS`, `FUNCTION`, `METHOD`
-- **4 edge types**: `CONTAINS`, `CALLS`, `IMPORTS`, `DEPENDS_ON`
-- Resolves `self.method()`, local functions, and module imports
-- Cycle-safe traversals with `visited` sets
-
-### 💥 Deterministic Impact Engine
-
-- **BFS propagation** from changed function to all upstream callers
-- **5-factor scoring algorithm** (0–100):
-  - Direct callers: +25
-  - Transitive callers: +5 each (max 25)
-  - Affected modules: +5 each (max 20)
-  - Dependency depth ≥ 3: +5 per level (max 20)
-  - Node centrality > 2: +2 per point (max 10)
-- **Risk levels**: LOW, MEDIUM, HIGH, CRITICAL
-- **Impact paths**: `nx.all_simple_paths()` with cutoff=5
-
-### 🤖 ML Risk Prediction (Experimental)
-
-- **11 features** per function:
-  - Graph: `dependency_count`, `downstream_count`, `call_depth`, `centrality`
-  - Git: `historical_changes`, `author_count`, `lines_changed`
-  - Temporal: `file_age_days`, `recent_change_frequency`
-  - Blast radius: `files_affected`, `affected_components`
-- **XGBoost regressor** with StandardScaler normalization
-- Graceful fallback when model not loaded
-
-### 🧠 LLM Explanation Layer
-
-- Structured prompts for: summary, why risky, impact paths, recommended tests
-- **Robust JSON parsing** with deterministic fallback
-- Works without API key (template-based explanations)
-
-### 🔗 GitHub PR Integration
-
-- Webhook endpoint with **HMAC-SHA256** signature verification
-- Isolated repo cloning with **SHA-256 hashed names**
-- Auto-posts markdown impact reports to PRs
-- Supports `opened`, `synchronize`, `reopened` events
-
-### 🎨 Interactive Frontend
-
-- Repository selector with live data
-- One-click analysis pipeline
-- **React Flow** graph visualization with:
-  - Color-coded nodes by type and severity
-  - Click-to-inspect details
-  - MiniMap and zoom controls
-- Impact score dashboard
-- Affected components list
-- Impact path visualization
+1. Paste a public GitHub URL (e.g. `github.com/tiangolo/fastapi`) → **Analyze Repository**
+2. Watch it clone → parse → build the Software Genome live
+3. Open **Software Genome** → search a real function in that repo
+4. Hit **Analyze Impact** → show the Impact Score + affected components
+5. Click into an **Impact Path** → show *why* (the actual call chain, not a black box)
+6. Line to close with: *"Git told us what changed. CodeGenome tells us what that change touches — and why."*
 
 ---
 
-## Demo
+## 🧠 How It Works
 
-Run the deterministic demo with zero configuration:
+```
+GitHub URL → Clone → Parse (Python AST) → Software Genome (NetworkX graph)
+    → Impact Propagation → Risk Features → [optional ML] → [optional LLM explanation]
+    → Developer Dashboard
+```
+
+**Design principle:** deterministic graph analysis is the source of truth. AI is an *explainer*, never the evidence.
+
+```
+Bad:   Code → LLM → "Looks risky"
+Ours:  Code → Static Analysis → Graph → Evidence → Risk Score → LLM explains the evidence
+```
+
+If no LLM key is configured, the deterministic engine still works end-to-end — nothing about correctness depends on AI being switched on.
+
+### The Software Genome
+
+Four relationship types are enough to model real impact:
+
+| Relationship | Meaning |
+|---|---|
+| `CONTAINS` | Module → Class → Function/Method |
+| `CALLS` | Function → Function |
+| `IMPORTS` | Module → Module |
+| `DEPENDS_ON` | Module → Module |
+
+Example trace for a single changed function:
+
+```
+calculate_discount()
+        ↓
+    checkout() ──┬── invoice() ──── refund()
+                 ↓         ↓            ↓
+             payment()  tax_engine() refund_calc()
+                 ↓
+          payment_provider
+```
+
+One "1 line changed" commit → **5 downstream components**, all surfaced automatically, with the call chain shown as evidence for each.
+
+### Output: score + reasons, not just a label
+
+CodeGenome never just says `HIGH RISK`. It shows the path:
+
+> `checkout()` depends on `calculate_discount()`, and `payment()` is downstream of `checkout()` → **Impact Score: 78/100 · HIGH**
+
+From that graph it can also derive a **targeted test plan** instead of "re-run everything":
+
+```
+REQUIRED   ✓ checkout_discount_test  ✓ payment_total_test  ✓ invoice_total_test
+OPTIONAL   ○ analytics_discount_test
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+Browser → Next.js (:3000) → HTTP → FastAPI (:8000)
+                                       ├── Git Analyzer
+                                       ├── Source Parser (Python AST)
+                                       ├── Software Genome (NetworkX)
+                                       └── Impact Engine → [Risk/ML] → [LLM explain]
+```
+
+## 🛠️ Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Backend | Python, FastAPI, Uvicorn |
+| Static Analysis | Python `ast` |
+| Git Analysis | GitPython |
+| Graph | NetworkX |
+| Database | SQLite |
+| Frontend | Next.js, React, TypeScript, Tailwind, React Flow |
+| ML (optional) | scikit-learn, XGBoost |
+| LLM (optional) | Provider-agnostic abstraction |
+| Env / Tooling | `uv`, `npm` |
+
+MVP is **local-first** — no paid cloud infra required to run or demo it.
+
+---
+
+## 🚀 Quick Start (2 terminals)
+
+**Prereqs:** Python 3.12+, Node 20+, Git, `uv`, `npm`
 
 ```bash
-python scripts/demo.py
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd codegenome
 ```
 
-### Sample Output
-
-```
-WHAT CHANGED?
-  checkout.py: modified (+3 -3)
-
-CHANGED FUNCTIONS:
-  - checkout.calculate_discount
-  - checkout.checkout
-
-Impact Score: 40/100
-Risk Level: MEDIUM
-
-Potentially Affected:
-  checkout
-  order
-
-WHY:
-checkout.calculate_discount has 1 direct caller(s): checkout.checkout.
-1 transitive caller(s) depend on this change: order.create_order.
-Impact spans 2 module(s), increasing blast radius.
-
-WHAT COULD BREAK?
-  - checkout
-  - order
-
-RECOMMENDED TESTS:
-  [PASS] checkout_test
-  [PASS] order_test
-```
-
----
-
-## Quick Start
-
+**Terminal 1 — Backend**
 ```bash
-# 1. Install dependencies
-pip install -e .
-uv pip install pandas xgboost scikit-learn
+uv sync
+uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+→ API: `http://localhost:8000` · Docs: `http://localhost:8000/docs`
 
-# 2. Run CLI demo (no backend needed)
-python scripts/demo.py
-
-# 3. Start backend
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# 4. Start frontend (new terminal)
+**Terminal 2 — Frontend**
+```bash
 cd frontend
 npm install
+cp .env.example .env.local   # set NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
+→ App: `http://localhost:3000`
 
-**Access points:**
+Then paste a public GitHub repo URL into the UI and hit **Analyze Repository**. Results are generated from *that* repo — never a hardcoded demo.
 
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
-- API Docs: `http://localhost:8000/docs`
+<details>
+<summary><strong>Troubleshooting</strong></summary>
 
----
+- `uvicorn is not recognized` → always run through `uv run uvicorn ...`, not bare `uvicorn`
+- `ModuleNotFoundError: No module named 'backend'` → you must run from the project root (`codegenome/`), not `codegenome/backend/`
+- `--port $PORT` fails locally on Windows → `$PORT` is a hosting-platform env var; use `--port 8000` explicitly for local dev
+- `uv sync` reports a locked/broken `.venv` → kill running python/uvicorn processes, delete `.venv`, re-run `uv sync`
+- Frontend can't reach backend → confirm `http://localhost:8000/docs` loads, check `NEXT_PUBLIC_API_URL` in `.env.local`, check the Network tab
 
-## API Endpoints
+</details>
 
-| Method | Endpoint                | Description                       |
-| ------ | ----------------------- | --------------------------------- |
-| `GET`  | `/`                     | API health check                  |
-| `GET`  | `/repositories`         | List registered repositories      |
-| `POST` | `/repositories`         | Register a local repository       |
-| `POST` | `/analyze`              | Run full impact analysis          |
-| `GET`  | `/analysis/{id}`        | Get analysis run details          |
-| `GET`  | `/analysis/{id}/impact` | Get impact results                |
-| `GET`  | `/analysis/{id}/graph`  | Get graph data for visualization  |
-| `POST` | `/github/webhook`       | GitHub PR webhook (HMAC verified) |
-
----
-
-## Test Coverage
+<details>
+<summary><strong>Tests</strong></summary>
 
 ```bash
-# Backend + Core tests
-pytest tests/ backend/tests -v
-
-# Frontend lint + build
-cd frontend && npm run lint && npm run build
+uv run pytest              # backend
+uv run ruff check .        # lint, if configured
+cd frontend && npm test    # frontend
+npm run build               # production build check before committing
 ```
 
-**45 passing tests** across:
-
-- 14 core engine (parser, graph, impact)
-- 6 git engine
-- 7 ML pipeline
-- 4 LLM explanations
-- 8 GitHub/security
-- 6 backend API
+</details>
 
 ---
 
-## Environment Variables
-
-```bash
-# GitHub Integration (optional)
-GITHUB_WEBHOOK_SECRET="your-webhook-secret"
-GITHUB_TOKEN="your-github-token"
-
-# LLM Configuration (optional)
-CODEGENOME_LLM_API_KEY="your-openai-key"
-CODEGENOME_LLM_BASE_URL="https://api.openai.com/v1"
-CODEGENOME_LLM_MODEL="gpt-4o-mini"
-```
-
----
-
-## What Makes This Hackathon-Winning
-
-### 🔬 Novel Concept
-
-**"Software Genome"** — a biological metaphor applied to code structure. Unlike simple call graphs, this models modules, classes, methods, and imports as a living system where changes propagate like genetic mutations.
-
-### 🏗️ Full-Stack Depth
-
-- Real async backend with SQLAlchemy ORM
-- Interactive frontend with graph visualization
-- ML pipeline with feature engineering, training, evaluation
-- LLM integration with structured output
-- GitHub webhook integration with HMAC security
-
-### 🛡️ Production-Grade
-
-- HMAC-SHA256 webhook verification
-- Sandboxed repository cloning
-- No code execution on host
-- Secrets from env only
-- 45 passing tests
-
-### 🚀 Immediately Actionable
-
-- GitHub PR auto-commenting
-- Deterministic CLI demo
-- Works without API keys (graceful degradation)
-- Interactive visualization for intuition
-
----
-
-## Production Deployment
-
-### Frontend (Vercel)
-
-1. Import the repository into Vercel
-2. Set **Root Directory** to `frontend`
-3. Set environment variable:
-   - `NEXT_PUBLIC_API_BASE=https://codegenome-api.onrender.com`
-4. Deploy
-
-### Backend (Render)
-
-1. Create a new **Web Service** on Render
-2. Connect your repository
-3. Set **Root Directory** to `backend`
-4. Set **Build Command** to `pip install -e .`
-5. Set **Start Command** to `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
-6. Add environment variables:
-   - `DATABASE_URL=sqlite+aiosqlite:///./codegenome.db`
-   - `GITHUB_WEBHOOK_SECRET=<random-secret>`
-7. Deploy
-
-> **Note:** Render's free tier uses an ephemeral filesystem. SQLite data is lost between deployments. For production persistence, upgrade to PostgreSQL and set `DATABASE_URL=postgresql+asyncpg://...`.
-
-### API Flow
+## 🔌 API Overview
 
 ```
+GET  /health
 POST /repositories/github
-POST /analyze
-GET /analysis/{id}/status (poll until completed)
-GET /analysis/{id}/functions
-GET /analysis/{id}/impact
-GET /analysis/{id}/graph
+POST /repositories/{id}/analyze
+GET  /analysis/{id}          GET /analysis/{id}/graph
+GET  /analysis/{id}/functions
+POST /analysis/{id}/impact   GET /analysis/{id}/impact
 ```
+Live OpenAPI spec at `/docs` is the source of truth for the running version — endpoints above may evolve.
+
+## 🔒 Security Posture
+
+Repository source code is treated as **untrusted input**.
+
+| Allowed | Never |
+|---|---|
+| Read source files, parse AST, read git metadata, build graphs | Auto-execute repo Python, npm scripts, shell scripts, Makefiles, setup scripts, tests |
+
+Also: GitHub URL validation, safe temp dirs, path-traversal prevention, no `shell=True` on untrusted input, webhook signature verification, temp-repo cleanup.
+
+## ⚠️ Known Limitations
+
+- Static analysis can't perfectly resolve dynamic/reflective calls
+- Python is the current primary analysis target (unsupported languages are reported honestly, not silently skipped)
+- Impact scores need validation against real historical outcomes
+- ML quality is bounded by available historical data — no fabricated accuracy numbers, ever
+- LLM explanations are only as good as the graph evidence feeding them
+
+## 🧭 Roadmap
+
+| Phase | Focus |
+|---|---|
+| 1 — Core Intelligence *(current)* | Python parsing, git detection, genome graph, deterministic impact |
+| 2 — Developer Platform | FastAPI + SQLite API, interactive React Flow dashboard |
+| 3 — AI Intelligence | XGBoost risk model, evidence-grounded LLM explanations, test recommendation |
+| 4 — Engineering Integration | GitHub PR bot, automated impact reports, multi-language (Tree-sitter) support |
+| Future | OpenTelemetry runtime graphs, Graph Neural Networks, autonomous test selection |
+
+## 🤝 Contributing
+
+Focused PRs with tests + docs, no secrets, no arbitrary execution of repository code. Good first areas: Python parser edge cases, Tree-sitter language support, graph algorithms, impact scoring, visualization.
+
+## 📜 License
+
+_Add your actual license here — don't claim one the repo doesn't have._
 
 ---
 
-## Future Roadmap
+<div align="center">
 
-- [ ] **Neo4j persistence** for large-scale graph queries
-- [ ] **GNN-based prediction** (PyTorch Geometric)
-- [ ] **Multi-language** support (TypeScript, Go)
-- [ ] **Runtime behavior graph** (execution traces)
-- [ ] **Autonomous test generation**
-- [ ] **OpenTelemetry** observability
-- [ ] **Kubernetes** deployment
-- [ ] **Cloud SaaS** multi-tenant
+**CodeGenome** — understand the impact before production does.
 
----
-
-## License
-
-MIT
-
----
-
-<p align="center">
-  Built with 🧬 for better software
-</p>
+</div>
