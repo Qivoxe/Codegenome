@@ -55,9 +55,10 @@ class GitHubRepositoryService:
                 _rmtree_safe(workspace)
                 try:
                     subprocess.run(
-                        ["git", "clone", "--depth=1", clone_url, str(workspace)],
+                        ["git", "clone", clone_url, str(workspace)],
                         check=True,
                         capture_output=True,
+                        timeout=CLONE_TIMEOUT_SECONDS,
                     )
                 except subprocess.CalledProcessError as exc:
                     _rmtree_safe(workspace)
@@ -67,9 +68,10 @@ class GitHubRepositoryService:
         _rmtree_safe(workspace)
         try:
             subprocess.run(
-                ["git", "clone", "--depth=1", clone_url, str(workspace)],
+                ["git", "clone", clone_url, str(workspace)],
                 check=True,
                 capture_output=True,
+                timeout=CLONE_TIMEOUT_SECONDS,
             )
         except subprocess.CalledProcessError as exc:
             _rmtree_safe(workspace)
