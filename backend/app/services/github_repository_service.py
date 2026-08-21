@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.models import Repository
 from codegenome.security import SecureRepoManager
 
+CLONE_TIMEOUT_SECONDS = 60
 
 def _rmtree_safe(path: Path) -> None:
     if not path.exists():
