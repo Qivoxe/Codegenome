@@ -11,7 +11,7 @@
 ![frontend](https://img.shields.io/badge/frontend-Next.js%20%2F%20React%20Flow-black)
 ![license](https://img.shields.io/badge/license-add--your--license-lightgrey)
 
-[Quick Start](#-quick-start-2-terminals) · [How It Works](#-how-it-works) · [60-Second Demo](#-60-second-judge-demo) · [Roadmap](#-roadmap)
+[Quick Start](#-quick-start-2-terminals) · [How It Works](#-how-it-works) · [Deployment](#-deployment) · [60-Second Demo](#-60-second-judge-demo) · [Roadmap](#-roadmap)
 
 </div>
 
@@ -127,13 +127,14 @@ Browser → Next.js (:3000) → HTTP → FastAPI (:8000)
 | Static Analysis | Python `ast` |
 | Git Analysis | GitPython |
 | Graph | NetworkX |
-| Database | SQLite |
+| Database | PostgreSQL (deployed) via async SQLAlchemy (`asyncpg` / `psycopg2-binary`) · SQLite (`aiosqlite`) for local dev |
 | Frontend | Next.js, React, TypeScript, Tailwind, React Flow |
 | ML (optional) | scikit-learn, XGBoost |
 | LLM (optional) | Provider-agnostic abstraction |
 | Env / Tooling | `uv`, `npm` |
+| Hosting | Backend on Render (FastAPI), frontend on Vercel (Next.js), managed Postgres on Render |
 
-MVP is **local-first** — no paid cloud infra required to run or demo it.
+MVP is **local-first** for development — SQLite works out of the box with zero setup — and **cloud-backed** in production, where Postgres provides persistent storage across deploys and restarts.
 
 ---
 
@@ -153,6 +154,8 @@ uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 → API: `http://localhost:8000` · Docs: `http://localhost:8000/docs`
 
+By default this uses a local SQLite file (`codegenome.db`) — no database setup required for local dev.
+
 **Terminal 2 — Frontend**
 ```bash
 cd frontend
@@ -171,6 +174,7 @@ Then paste a public GitHub repo URL into the UI and hit **Analyze Repository**. 
 - `ModuleNotFoundError: No module named 'backend'` → you must run from the project root (`codegenome/`), not `codegenome/backend/`
 - `--port $PORT` fails locally on Windows → `$PORT` is a hosting-platform env var; use `--port 8000` explicitly for local dev
 - `uv sync` reports a locked/broken `.venv` → kill running python/uvicorn processes, delete `.venv`, re-run `uv sync`
+- `ModuleNotFoundError: No module named 'asyncpg'` or `'psycopg2'` (deployed only) → these are Postgres drivers required when `DATABASE_URL` points at Postgres; confirm both are listed in `pyproject.toml` dependencies and redeploy
 - Frontend can't reach backend → confirm `http://localhost:8000/docs` loads, check `NEXT_PUBLIC_API_URL` in `.env.local`, check the Network tab
 
 </details>
@@ -186,6 +190,37 @@ npm run build               # production build check before committing
 ```
 
 </details>
+
+---
+
+## ☁️ Deployment
+
+The hosted demo runs the backend on **Render** and the frontend on **Vercel**, with a managed **Render PostgreSQL** instance for persistent storage — SQLite alone isn't safe in production, since Render's free-tier filesystem is ephemeral and gets wiped on restarts/redeploys.
+
+**Backend (Render)**
+
+1. Provision a Postgres instance on Render (Free tier is enough for a demo/hackathon).
+2. Copy its **Internal Database URL**.
+3. In the backend web service → **Environment**, add:
+   ```
+   DATABASE_URL=<internal database url>
+   ```
+4. Ensure `pyproject.toml` includes both Postgres drivers:
+   ```toml
+   dependencies = [
+       ...
+       "asyncpg>=0.29",
+       "psycopg2-binary>=2.9",
+   ]
+   ```
+5. `backend/app/database.py` auto-detects the scheme and rewrites it for the async engine (`postgresql+asyncpg://`) and for the sync engine used by `init_db()` (`postgresql+psycopg2://`) — no manual URL editing needed. If `DATABASE_URL` isn't set at all, it falls back to local SQLite automatically.
+6. Push to the connected branch — Render auto-deploys.
+
+**Frontend (Vercel)**
+
+- Set `NEXT_PUBLIC_API_URL` in Vercel's project environment variables to the deployed Render backend URL (e.g. `https://codegenome-api.onrender.com`). A `.env.local` file is **not** deployed — this must be set in Vercel's dashboard directly.
+
+**Note on Render's free tier:** the web service spins down after inactivity, so the first request after idle time can take 30–60s to respond. This is expected and not a bug — worth mentioning if demoing live and the first load feels slow.
 
 ---
 
@@ -218,13 +253,14 @@ Also: GitHub URL validation, safe temp dirs, path-traversal prevention, no `shel
 - Impact scores need validation against real historical outcomes
 - ML quality is bounded by available historical data — no fabricated accuracy numbers, ever
 - LLM explanations are only as good as the graph evidence feeding them
+- Render free-tier Postgres instances expire after a fixed trial period — fine for a hackathon demo window, but not a long-term production setup without upgrading
 
 ## 🧭 Roadmap
 
 | Phase | Focus |
 |---|---|
 | 1 — Core Intelligence *(current)* | Python parsing, git detection, genome graph, deterministic impact |
-| 2 — Developer Platform | FastAPI + SQLite API, interactive React Flow dashboard |
+| 2 — Developer Platform | FastAPI + Postgres API, interactive React Flow dashboard |
 | 3 — AI Intelligence | XGBoost risk model, evidence-grounded LLM explanations, test recommendation |
 | 4 — Engineering Integration | GitHub PR bot, automated impact reports, multi-language (Tree-sitter) support |
 | Future | OpenTelemetry runtime graphs, Graph Neural Networks, autonomous test selection |
